@@ -1,0 +1,9 @@
+C:\TFG\SEDTRANS_0.1.F95(5) : warning 197 - Variable T has been declared but not used
+C:\TFG\SEDTRANS_0.1.F95(5) : warning 197 - Variable LX has been declared but not used
+C:\TFG\SEDTRANS_0.1.F95(5) : warning 197 - Variable LY has been declared but not used
+C:\TFG\SEDTRANS_0.1.F95(5) : warning 197 - Variable A has been declared but not used
+C:\TFG\SEDTRANS_0.1.F95(5) : warning 197 - Variable N has been declared but not used
+C:\TFG\SEDTRANS_0.1.F95(6) : warning 197 - Variable DELTAT has been declared but not used
+C:\TFG\SEDTRANS_0.1.F95(6) : warning 197 - Variable DELTAX has been declared but not used
+C:\TFG\SEDTRANS_0.1.F95(6) : warning 197 - Variable DELTAY has been declared but not used
+Creating executable: C:\TFG\SEDTRANS_0.1.EXE
