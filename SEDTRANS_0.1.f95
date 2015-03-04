@@ -1,54 +1,88 @@
 program sedtrans
 	winapp
-    implicit none
-    !character(len=10):: name
-    integer   ::  T,n,m,Lx,Ly,i
-	real :: deltaT,deltaX,deltaY
-    real,dimension(:,:),allocatable :: Q,beta,alpha
-    real*8,dimension(:),allocatable :: Cq,Hb,x,y
+	implicit none
+    include <windows.ins>
+    
+	!Define variables and parameters
+!$$$$$$     character(len=10):: name
+	integer :: T,n,m,Lx,Ly,i,j,T_current,secs
+    double precision fill
+	real*8 :: T_real,deltaT,deltaX,deltaY,pi
+	real*8,dimension(:,:),allocatable :: y_omni,Q_omni,beta,alpha
+	real*8,dimension(:),allocatable :: Cq,Hb,x,y,Q
+    parameter(pi=3.1416)
 
-    print *, 'Number of ''x'' divisions?'
-    read *, n
-    allocate(x(n+1))
-    allocate(y(n+1))
-!$$$$$$     print *, 'Number of time divisions?'
-!$$$$$$     read *, T
-!$$$$$$     allocate()
+	!Provisional size of beach
+    Lx=50
+    Ly=100
 
-!$$$$$$     real*8,dimension(12):: x,y
-!$$$$$$     nx=12;m=12
-!$$$$$$     allocate(x(n))
-!$$$$$$     allocate(y(m))
+	!Define accuracy of net
+	print *, 'Number of ''x'' divisions?'
+	read *, n
+	allocate(x(n+1))
+	allocate(y(n+1))
+    allocate(Q(n+1))
+	print *, 'Number of time steps?'
+	read *, T
+    T_real=T
+	allocate(y_omni(T+1,n+1))
+	allocate(Q_omni(T+1,n+1))
 
-    !Set initial conditions
-    do i=1,n+1
-      x(i)=i-1
-      y(i)=sin(x(i))/10+3
-    enddo
-!$$$$$$     deallocate(x,y) 
+	!Calculate deltas
+	deltaX=Lx/n
+!$$$$$$     deltaY=Ly/m
+	deltaT=365*24*3600/T	!Length of experiment is 1 yr. (measured in seconds)
 
-	i=winio@('%ww%ca[Sediment Transport Plot]%bg[grey]%pv&')
+	!Set initial conditions
+	do i=1,n+1
+		x(i)=i-1
+		y(i)=sin(x(i))/10+3
+		y_omni(1,i)=y(i)
+	enddo
+	!Calculate 'Q' and 'y' through time (TEMPORARY: rough approximations made!!)
+	do j=1,T
+    	do i=2,n+1
+			Q_omni(j+1,i)=0.15*(1.2**(5/2))*sin(2*((pi/12)-(y_omni(j,i)-y_omni(j,i-1))/deltaX))
+		enddo
+        Q_omni(j+1,1)=Q_omni(j+1,2)
+        do i=2,n+1
+        	y_omni(j+1,i-1)=y_omni(j,i-1)-(deltaT/(deltaX*10))*(Q_omni(j+1,i)-Q_omni(j+1,i-1))
+        enddo
+        y_omni(j+1,n+1)=y_omni(j+1,n)
+	enddo
+
+	!Paint and plot
+    T_current=5
+    fill=T_current/T_real
+	i=winio@('%ww%ca[Shoreline Plot]%bg[window]%pv&')
 	i=winio@('%pl[colour=red,y_min=0,x_array]&',400,250,n,x,y)
+    !i=winio@('%ff%nl%cn%20sl&',T_current,0.0D0,T_real)
+    i=winio@('%ff%nl%cn%2.1ob[status,thin_panelled]&')
+    i=winio@('%30br%cb&',fill,RGB@(0,128,128))
+    i=winio@('%co[no_data_border,right_justify]%dd%il%6rd%cb&',1,0,T,T_current)
     i=winio@('%ff%nl%cn%tt[Close]')
-!$$$$$$     !print *,'time?'
-!$$$$$$     !read*,t
-!$$$$$$     t=365
-!$$$$$$     n=365
-!$$$$$$     deltaT=t/n
-!$$$$$$     Lx=50; Ly=100
+!$$$$$$     call axgrid('*cartesian',1,-1)
 
-!$$$$$$     a=winio@('%1SI!Tío, eres muy feo.%nl%nl%CN%6bt[Lo sé]&')
-!$$$$$$     a=winio@('%ca[Suspense!]')
+!$$$$$$     secs=2
+!$$$$$$     do while(secs>=1)
+!$$$$$$         if (secs>=1000) then
+!$$$$$$             secs=2
+!$$$$$$         else
+!$$$$$$             secs=secs+1
+!$$$$$$         endif
+        CALL update_plot    
+!$$$$$$     enddo
 
-   
-!$$$$$$    print *,'What is your name?'
-!$$$$$$    read *,name
-!$$$$$$    print *, 'Hi ',TRIM(name),'! Enter number of pounds and  pence'
-!$$$$$$    read *, pounds,pence
-!$$$$$$    total =100 * pounds + pence
-!$$$$$$    print *,'the total money in pence is ',total
 	CONTAINS
-    SUBROUTINE resize_array
+    
+    SUBROUTINE update_plot
+		do i=1,n+1
+			y(i)=y_omni(T_current+1,i)
+		enddo
+        CALL window_update@(T_current,fill,y)
+    ENDSUBROUTINE update_plot
+    
+	SUBROUTINE resize_array
 !$$$$$$         INTEGER,DIMENSION(:),ALLOCATABLE :: tmp_arr
 !$$$$$$         
 !$$$$$$         ALLOCATE(tmp_arr(2*SIZE(array)))
@@ -57,5 +91,5 @@ program sedtrans
 !$$$$$$         ALLOCATE(array(size(tmp_arr)))
 !$$$$$$         array=tmp_arr
     
-    ENDSUBROUTINE resize_array
+	ENDSUBROUTINE resize_array
 end program sedtrans
