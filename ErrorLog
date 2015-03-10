@@ -1,9 +1,0 @@
-C:\TFG\SEDTRANS_0.1.F95(8) : warning 197 - Variable M has been declared but not used
-C:\TFG\SEDTRANS_0.1.F95(8) : warning 242 - Variable LY has been given a value but never used
-C:\TFG\SEDTRANS_0.1.F95(8) : warning 197 - Variable SECS has been declared but not used
-C:\TFG\SEDTRANS_0.1.F95(10) : warning 197 - Variable DELTAY has been declared but not used
-C:\TFG\SEDTRANS_0.1.F95(11) : warning 197 - Variable BETA has been declared but not used
-C:\TFG\SEDTRANS_0.1.F95(11) : warning 197 - Variable ALPHA has been declared but not used
-C:\TFG\SEDTRANS_0.1.F95(12) : warning 197 - Variable CQ has been declared but not used
-C:\TFG\SEDTRANS_0.1.F95(12) : warning 197 - Variable HB has been declared but not used
-Creating executable: C:\TFG\SEDTRANS_0.1.EXE
