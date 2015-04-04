@@ -1,0 +1,5 @@
+(S.E.P.:w, TEXT attempt at state 3: call ignored)
+(S.E.P.:w, CLOSE attempt at state 4: call ignored)
+(S.E.P.:w, INITIALISE attempt at state 4: call ignored)
+(S.E.P.:w, OPTION SELECT attempt at state 4: call ignored)
+(S.E.P.:w, OPTION SELECT attempt at state 4: call ignored)
