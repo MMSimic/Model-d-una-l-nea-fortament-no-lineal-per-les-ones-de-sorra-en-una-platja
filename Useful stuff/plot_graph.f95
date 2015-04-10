@@ -11,7 +11,7 @@ REAL Z(NX,NY)
 
 do i=1,NX
 	do j=1,NY
-    	Z(i,j)=i+j
+    	Z(i,j)=max(i,j)
     enddo
 enddo
 

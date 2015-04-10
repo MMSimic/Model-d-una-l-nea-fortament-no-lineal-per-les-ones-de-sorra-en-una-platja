@@ -8,10 +8,10 @@ MODULE definitions
     character*7 shore_cases(2)
     data shore_cases /'Case 1','Case 2'/
     integer :: nT,n,ny,Lx,Ly,T_current,selected_case,show_init,lock_plot,lock_data
-    real*8 :: deltaT,deltaX,deltaY,pi,fill,slider_current,K_par,ro_s,ro_w,p,brindex,mu,T,theta0,H0,A,Hb_local,theta_b_local
-    real*8,dimension(:,:),allocatable :: ys_omni,Q,Hb,theta_b
+    real*8 :: deltaT,deltaX,deltaY,pi,fill,slider_current,K_par,ro_s,ro_w,p,brindex,mu,T,theta0,H0,A,d50,Hb_local,theta_b_local,d
+    real*8,dimension(:,:),allocatable :: ys_omni,Q,Hb,theta_b,H_vis
     real*8,dimension(:,:,:),allocatable :: H,theta
-    real*8,dimension(:),allocatable :: x,ys,y,H_local
+    real*8,dimension(:),allocatable :: x,ys,y,H_local,ygroin
     parameter(pi=3.1415927)
     parameter(g=9.80665)
 ENDMODULE definitions
@@ -26,12 +26,12 @@ PROGRAM sedtrans
     use definitions
     implicit none
     include <windows.ins>
-    integer :: i,j,k,setup_plot,update_plot,update_chart,sure_quit,plot_window,page1,page2,lock_unlock
-    external setup_plot,update_plot,update_chart,sure_quit,lock_unlock
+    integer :: i,j,k,m,setup_plot,update_plot,update_chart,sure_quit,plot_window,page1,page2,lock_unlock,propagate,Gt
+    external paint_plot,setup_plot,update_plot,update_chart,sure_quit,lock_unlock,propagate,resize_array,reset_shore
 
     !Provisional size of beach
-    Lx=3000
-    Ly=3000
+    Lx=10000
+    Ly=10000
 
     !Define accuracy of net
 !$$$$$$     print *, 'Number of ''x'' divisions?'
@@ -40,6 +40,8 @@ PROGRAM sedtrans
     ny=50
     allocate(x(n+1))
     allocate(ys(n+1))
+    allocate(ygroin(n+1))
+    allocate(H_vis(n+1,ny+1))
     allocate(y(ny+1))
     allocate(H_local(ny+1))
 !$$$$$$     print *, 'Number of time steps?'
@@ -61,38 +63,49 @@ PROGRAM sedtrans
         y(j)=(j-1)*deltaY
     enddo
     !Set initial conditions
-    do i=1,n+1
-        x(i)=(i-1)*deltaX
-!$$$$$$         ys(i)=sin((i-1)*(pi/(37.1/8)))*10+200
-        ys(i)=200
-        ys_omni(1,i)=ys(i)
-    enddo
-    theta0=15.0
+    d50=0.2
+    A=0.09
     T=14.0
+    theta0=15.0
     H0=3.0
     K_par=0.7
     ro_s=2.65
     ro_w=1.0
     p=0.4
     brindex=0.5
-    mu=0.2
+    mu=(K_par*ro_w*sqrt(g/brindex))/(16*(ro_s-ro_w)*(1-p))
+    ygroin(:)=0
+!$$$$$$     ygroin(1)=650
+    ygroin(25)=300
+!$$$$$$     ygroin(n+1)=650
+    d=200
+    do i=1,n+1
+        x(i)=(i-1)*deltaX
+!$$$$$$         ys(i)=sin((i-1)*(pi/(37.1/8)))*10+200
+        ys(i)=d
+        ys_omni(1,i)=ys(i)
+        m=propagate(ys(i))
+            Hb(i,1)=Hb_local
+            theta_b(i,1)=theta_b_local
+            H(i,:,1)=H_local(:)
+    enddo
+    Gt=mu*((sum(Hb)/size(Hb))**2.5)/(A*(Ly**0.6667))
+!$$$$$$     print*,(deltaX**2)/(2*G)
+!$$$$$$     print*,deltaT
     selected_case=1
     lock_plot=0
     lock_data=1
     T_current=0
     fill=T_current/real(nT)
 
-    A=0.1
 
     !Create the window
     !Sheet pages setup
     i=winio@('%sh&',page1)
         i=winio@('%ca[Parameters]&')
         i=winio@('%1.1ob[named_l][Accuracy]&')
-            i=winio@('%1.5ob[no_border]&')
+            i=winio@('%1.3ob[no_border]&')
                 i=winio@('nT:  %cb&')
-                i=winio@('Lx:  %cb&')
-                i=winio@('Ly:  %cb&')
                 i=winio@('nx:  %cb&')
                 i=winio@('ny:  %cb&')
         i=winio@('%cb&')
@@ -112,9 +125,11 @@ PROGRAM sedtrans
                             i=winio@('%dy%`bg[white]%~^5rf%cb%cb&',0.5D0,brindex,lock_data,update_chart)
                     i=winio@('%eq[{mu}]    %co[check_on_focus_loss,right_justify]&',22L,29L)
                         i=winio@('%dy%`bg[white]%`~5rf%cb%cb&',0.5D0,mu,lock_data)
-                i=winio@('%`bg[inactivecaption]%1.1ob&')
+                i=winio@('%`bg[inactivecaption]%1.2ob&')
+                        i=winio@('%eq[d{sub 50}]%co[check_on_focus_loss,right_justify]&',35L,33L)
+                            i=winio@('%dy%`bg[white]%~^5rf%cb&',0.25D0,d50,lock_data,update_chart)
                         i=winio@('%eq[A]      %co[check_on_focus_loss,right_justify]&',17L,25L)
-                            i=winio@('%dy%`bg[white]%~5rf%cb&',0.25D0,A,lock_data)
+                            i=winio@('%dy%`bg[white]%`~5rf%cb&',0.25D0,A,lock_data)
                 i=winio@('%ff%nl%`bg[inactivecaption]%1.1ob&')
                         i=winio@('%eq[T]      %co[check_on_focus_loss,right_justify]&',17L,25L)
                             i=winio@('%dy%`bg[white]%~5rf%cb&',0.25D0,T,lock_data)
@@ -124,15 +139,25 @@ PROGRAM sedtrans
                             i=winio@('%dy%`bg[white]%~5rf%cb&',0.25D0,theta0,lock_data)
                         i=winio@('%nl%eq[H{sub 0}]%co[check_on_focus_loss,right_justify]&',35L,32L)
                             i=winio@('%dy%`bg[white]%~5rf%cb%cb%cb&',0.25D0,H0,lock_data)
+        i=winio@('%cb&')
+        i=winio@('%ff%nl%cn%`bg[scrollbar]%1.1ob&')
+            i=winio@('Initial shore at:  %co[check_on_focus_loss,right_justify]%`bg[white]%~5rf (m)&',d,lock_data)
+            i=winio@('%ff%nl%cn%~^bb[Reset Shoreline]&',lock_data,reset_shore)
         i=winio@('%cb')
     i=winio@('%sh&',page2)
         i=winio@('%ca[Structures]&')
-        i=winio@('%ff%nl%cn%`bg[window]%1.1ob[thin_panelled]ASDF%cb')
-    !Plot sub-window
+        i=winio@('%1.2ob&')
+            i=winio@('Insert:%cb&')
+            i=winio@('List%cb')
+    !H plot sub-window
+    !i=winio@('%ww[topmost,no_caption,no_frame]%ca[Wave Height]&')
+        !i=winio@('%1.1ob%1.2ob[no_border]%pl[x_axis=Y,y_axis=H,colour=blue,x_array]%cb%cn%bt[Close]%cb%cb',500,400,ny+1,y,H(1,:,1))
+    !ys plot sub-window
     i=winio@('%ww[no_caption,no_frame]%`lw&',plot_window)
         i=winio@('%ap&',65L,0L)
         i=winio@('%`bg[window]%1.1ob[thin_panelled]%`rb[Show initial line.]%cb%ff&',show_init)
-        i=winio@('%pl[colour=red,y_min=0,y_max=700,x_array]&',600,400,n,x,ys)
+        i=winio@('%pl[n_graphs=2,colour=red,colour=black,y_min=0,y_max=700,x_array]&',600,450,n+1,x,ys,ygroin)
+!$$$$$$         i=winio@('%pl[user_drawn]%sc&',600,400,paint_plot)
         i=winio@('%ff%nl%cn%`bg[window]%3.1ob[thin_panelled]&')
             i=winio@('%dy%`bg[white]%30br[percentage]%cb&',0.7D0,fill,RGB@(0,128,128))
             i=winio@('    %dy%`bg[white]%1.1ob[scored]%co[no_data_border,right_justify]&',0.4D0)
@@ -145,7 +170,19 @@ PROGRAM sedtrans
             i=winio@('%nl%cn%fn[Times New Roman]%ts%`bg[inactiveborder]%~^bt[Calculate]%sf%cb%cb&',1.4D0,lock_data,setup_plot)
         i=winio@('%cc',sure_quit)
         
-        !i=winio@('%pl[colour=red,x_array]',600,400,ny,y,-D(1,:))
+!$$$$$$         i=winio@('%pl[colour=red,x_array]',600,400,ny+1,y,H(1,:,1))
+
+!$$$$$$     do i=1,n+1
+!$$$$$$         H_vis(i,:)=H(i,:,1)
+!$$$$$$     enddo
+!$$$$$$     CALL VSNEW
+!$$$$$$ !$$$$$$     CALL VSRG(H_vis,n+1,ny+1)
+!$$$$$$     CALL sfeqx(0,deltaX)
+!$$$$$$     CALL sfeqy(0,deltaY)
+!$$$$$$     CALL rgsurf(H_vis,n+1,ny+1)
+!$$$$$$     CALL VSOUT
+!$$$$$$     CALL title7('T','C','Surface')
+!$$$$$$     CALL ENDPLT
        
     !i=winio@('%ff%nl%cn%^tt[Evaluar]&',update_plot)
 
@@ -156,30 +193,15 @@ ENDPROGRAM sedtrans
 !-------------------------------------------------------------------------------------------------------
 
 !---------------------------------------------------------------------
-!---                          Utilities                            ---
-!---------------------------------------------------------------------
-    
-SUBROUTINE resize_array
-!$$$$$$     INTEGER,DIMENSION(:),ALLOCATABLE :: tmp_arr
-!$$$$$$     
-!$$$$$$     ALLOCATE(tmp_arr(2*SIZE(array)))
-!$$$$$$     tmp_arr(1:SIZE(array))=array
-!$$$$$$     DEALLOCATE(array)
-!$$$$$$     ALLOCATE(array(size(tmp_arr)))
-!$$$$$$     array=tmp_arr
-ENDSUBROUTINE resize_array
-
-!---------------------------------------------------------------------
 !---                       Calculate Shore                         ---
 !---------------------------------------------------------------------
-    
-!Case 1: Groins at x=o and x=Lx (cases will be removed altogether in future versions)
+
 SUBROUTINE shore_case_1
     use definitions
     implicit none
     include <windows.ins>
     real*8 :: progress
-    integer :: i,k,m,ctrl,propagate
+    integer :: i,j,k,m,ctrl,propagate
     external propagate
     progress=0.0
     i=winio@('%ww[no_caption,topmost]&')
@@ -194,36 +216,165 @@ SUBROUTINE shore_case_1
             H(i,:,1)=H_local(:)
     enddo
     do k=1,nT
-        Q(k+1,1)=0
-        do i=2,n
+     !!Calculate Q (Sediment flux)
+      !Initial point (i=1)
+      if (ygroin(1)-ys_omni(k,1)>=0) then !groin
+        Q(k+1,1)=0 
+      else !Periodic
+        Q(k+1,1)=mu*(Hb(1,k)**(5/2))*sin(2*((theta_b(1,k)*pi/180)-atan((ys_omni(k,2)-ys_omni(k,n))/(2*deltaX)))) 
+      endif
+      !Intermediate points
+      do i=2,n
+        if (ygroin(i)-ys_omni(k,i)>=0) then !Groin
+          Q(k+1,i)=0 
+        else !Periodic
+          if (ygroin(i+1)>0) then !Right before a groin (don't use its 'ys' value!!)
+            Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i)-ys_omni(k,i-1))/(deltaX)))) 
+          elseif (ygroin(i-1)>0) then !Right after a groin (don't use its 'ys' value!!)
+            Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i+1)-ys_omni(k,i))/(deltaX)))) 
+          else
             Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i+1)-ys_omni(k,i-1))/(2*deltaX))))
-        enddo
-        Q(k+1,n+1)=0
-        ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(deltaX*10))*(Q(k+1,2)-Q(k+1,1))
-        m=propagate(ys_omni(k+1,1))
+          endif
+        endif
+      enddo
+      !Final point (i=n+1)
+      if (ygroin(n+1)-ys_omni(k,n+1)>=0) then !Groin
+        Q(k+1,n+1)=0 
+      else !Periodic
+        Q(k+1,n+1)=mu*(Hb(n+1,k)**(5/2))*sin(2*((theta_b(n+1,k)*pi/180)-atan((ys_omni(k,2)-ys_omni(k,n))/(2*deltaX))))
+      endif
+      
+     !!Calculate ys (Shore-line)
+      !Initial point (i=1)
+      if (ygroin(i)-ys_omni(k,i)>0) then !Groin
+!$$$$$$         ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(2*deltaX*10))*(Q(k+1,2)-Q(k+1,n)) 
+        ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(2*deltaX*10))*(Q(k+1,2)-Q(k+1,n)) 
+        m=propagate(ys_omni(k+1,1)) !This function calculates Hb and theta_b for the given 'i' position.
             Hb(1,k+1)=Hb_local
             theta_b(1,k+1)=theta_b_local
             H(1,:,k+1)=H_local(:)
-        do i=2,n
+      else
+        if (ygroin(i)>0) then !Sand has reached the tip of the groin.
+          ys_omni(k+1,i)=ygroin(i)
+          m=propagate(ys_omni(k+1,i))
+              Hb(i,k+1)=Hb_local
+              theta_b(i,k+1)=theta_b_local
+              H(i,:,k+1)=H_local(:)
+        else !No groin (periodic)
+          ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(2*deltaX*10))*(Q(k+1,2)-Q(k+1,n))
+          m=propagate(ys_omni(k+1,1))
+              Hb(1,k+1)=Hb_local
+              theta_b(1,k+1)=theta_b_local
+              H(1,:,k+1)=H_local(:)
+        endif
+      endif
+      !Intermediate points
+      do i=2,n
+        if (ygroin(i)-ys_omni(k,i)>0) then
+          ys_omni(k+1,i)=ys_omni(k,i)-(deltaT/(deltaX*10))*(Q(k+1,i+1)-Q(k+1,i)) !Groin
+          m=propagate(ys_omni(k+1,i))
+              Hb(i,k+1)=Hb_local
+              theta_b(i,k+1)=theta_b_local
+              H(i,:,k+1)=H_local(:)
+        else
+          if (ygroin(i)>0) then !Sand has reached the tip of the groin.
+            ys_omni(k+1,i)=ygroin(i)
+            m=propagate(ys_omni(k+1,i))
+                Hb(i,k+1)=Hb_local
+                theta_b(i,k+1)=theta_b_local
+                H(i,:,k+1)=H_local(:)
+          else !No groin
             ys_omni(k+1,i)=ys_omni(k,i)-(deltaT/(2*deltaX*10))*(Q(k+1,i+1)-Q(k+1,i-1))
             m=propagate(ys_omni(k+1,i))
                 Hb(i,k+1)=Hb_local
                 theta_b(i,k+1)=theta_b_local
                 H(i,:,k+1)=H_local(:)
-        enddo
-        ys_omni(k+1,n+1)=ys_omni(k,n+1)-(deltaT/(deltaX*10))*(Q(k+1,n+1)-Q(k+1,n))
+          endif
+        endif
+      enddo
+      !Final point (i=n+1)
+      if (ygroin(i)-ys_omni(k,i)>0) then !Groin
+        ys_omni(k+1,n+1)=ys_omni(k,n+1)-(deltaT/(deltaX*10))*(Q(k+1,n+1)-Q(k+1,n)) 
         m=propagate(ys_omni(k+1,n+1))
             Hb(n+1,k+1)=Hb_local
             theta_b(n+1,k+1)=theta_b_local
             H(n+1,:,k+1)=H_local(:)
+      else
+        if (ygroin(i)>0) then !Sand has reached the tip of the groin.
+          ys_omni(k+1,n+1)=ygroin(n+1)
+          m=propagate(ys_omni(k+1,n+1))
+              Hb(n+1,k+1)=Hb_local
+              theta_b(n+1,k+1)=theta_b_local
+              H(n+1,:,k+1)=H_local(:)
+        else !No groin (periodic)
+!$$$$$$           ys_omni(k+1,n+1)=ys_omni(k,n+1)-(deltaT/(2*deltaX*10))*(Q(k+1,2)-Q(k+1,n)) 
+          ys_omni(k+1,n+1)=ys_omni(k+1,1)
+          m=propagate(ys_omni(k+1,n+1))
+              Hb(n+1,k+1)=Hb_local
+              theta_b(n+1,k+1)=theta_b_local
+              H(n+1,:,k+1)=H_local(:)
+        endif
+      endif
         
         progress=progress+1.0/(nT+1) !Display progress.
         CALL window_update@(progress) 
     enddo
-    
+
     ctrl=1 !This is so the progress-bar window closes.
-    CALL window_update@(ctrl) 
+    CALL window_update@(ctrl)
 ENDSUBROUTINE shore_case_1
+
+!Case 1: Groins at x=o and x=Lx (cases will be removed altogether in future versions)
+!$$$$$$ SUBROUTINE shore_case_1
+!$$$$$$     use definitions
+!$$$$$$     implicit none
+!$$$$$$     include <windows.ins>
+!$$$$$$     real*8 :: progress
+!$$$$$$     integer :: i,j,k,m,ctrl,propagate
+!$$$$$$     external propagate
+!$$$$$$     progress=0.0
+!$$$$$$     i=winio@('%ww[no_caption,topmost]&')
+!$$$$$$     i=winio@('Processing... %2nl&')
+!$$$$$$     i=winio@('%`bg[white]%20br[percentage]&',progress,RGB@(0,128,128))
+!$$$$$$     i=winio@('%lw',ctrl)
+!$$$$$$     
+!$$$$$$     do i=1,n+1
+!$$$$$$         m=propagate(ys_omni(1,i))
+!$$$$$$             Hb(i,1)=Hb_local
+!$$$$$$             theta_b(i,1)=theta_b_local
+!$$$$$$             H(i,:,1)=H_local(:)
+!$$$$$$     enddo
+!$$$$$$     do k=1,nT
+!$$$$$$         Q(k+1,1)=0
+!$$$$$$         do i=2,n
+!$$$$$$             Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i+1)-ys_omni(k,i-1))/(2*deltaX))))
+!$$$$$$         enddo
+!$$$$$$         Q(k+1,n+1)=0
+!$$$$$$         ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(deltaX*10))*(Q(k+1,2)-Q(k+1,1))
+!$$$$$$         m=propagate(ys_omni(k+1,1))
+!$$$$$$             Hb(1,k+1)=Hb_local
+!$$$$$$             theta_b(1,k+1)=theta_b_local
+!$$$$$$             H(1,:,k+1)=H_local(:)
+!$$$$$$         do i=2,n
+!$$$$$$             ys_omni(k+1,i)=ys_omni(k,i)-(deltaT/(2*deltaX*10))*(Q(k+1,i+1)-Q(k+1,i-1))
+!$$$$$$             m=propagate(ys_omni(k+1,i))
+!$$$$$$                 Hb(i,k+1)=Hb_local
+!$$$$$$                 theta_b(i,k+1)=theta_b_local
+!$$$$$$                 H(i,:,k+1)=H_local(:)
+!$$$$$$         enddo
+!$$$$$$         ys_omni(k+1,n+1)=ys_omni(k,n+1)-(deltaT/(deltaX*10))*(Q(k+1,n+1)-Q(k+1,n))
+!$$$$$$         m=propagate(ys_omni(k+1,n+1))
+!$$$$$$             Hb(n+1,k+1)=Hb_local
+!$$$$$$             theta_b(n+1,k+1)=theta_b_local
+!$$$$$$             H(n+1,:,k+1)=H_local(:)
+!$$$$$$         
+!$$$$$$         progress=progress+1.0/(nT+1) !Display progress.
+!$$$$$$         CALL window_update@(progress) 
+!$$$$$$     enddo
+!$$$$$$ 
+!$$$$$$     ctrl=1 !This is so the progress-bar window closes.
+!$$$$$$     CALL window_update@(ctrl)
+!$$$$$$ ENDSUBROUTINE shore_case_1
 
 !Case 2: Periodic beach (cases will be removed altogether in future versions)
 SUBROUTINE shore_case_2
@@ -258,6 +409,19 @@ ENDSUBROUTINE shore_case_2
 !-------------------------------------------------------------------------------------------------------
 !---                                    External functions                                           ---
 !-------------------------------------------------------------------------------------------------------
+
+! Resize an array    
+FUNCTION resize_array(array,oldsize,newsize)
+!$$$$$$     integer :: oldsize,newsize
+!$$$$$$     real*8,dimension(oldsize),allocatable :: array
+!$$$$$$     real*8,dimension(:),allocatable :: tmp_arr
+!$$$$$$     
+!$$$$$$     allocate(tmp_arr(newsize))
+!$$$$$$     tmp_arr(1:size(array))=array
+!$$$$$$     deallocate(array)
+!$$$$$$     allocate(array(size(tmp_arr)))
+!$$$$$$     array=tmp_arr
+ENDFUNCTION resize_array
 
 ! Convert a string to a numeric value
 FUNCTION strtonum(str)
@@ -313,7 +477,7 @@ FUNCTION propagate(y_value)
     Kr=sqrt(cos(theta0*pi/180)/cos(asin((L1(j)/L0)*sin(theta0*pi/180))))
     H_local(j)=H0*Ks*Kr
     !Iterate while checking for breaking conditions
-    do while (H_local(j)/D_local(j)<=brindex)
+    do while (j>1.and.D_local(j)>0.and.H_local(j)/D_local(j)<=brindex)
         j=j-1
         if (D_local(j)/L1(j)>=0.5) then !deep waters
             Ks=L0/(2*T)
@@ -362,9 +526,61 @@ FUNCTION update_chart
     include <windows.ins>
     integer :: update_chart
     mu=(K_par*ro_w*sqrt(g/brindex))/(16*(ro_s-ro_w)*(1-p))
+
+    if (d50<=0.4) then
+        A=0.41*(d50**(0.94))
+    elseif (d50>0.4 .and. d50<=10) then
+        A=0.23*(d50**(0.32))
+    elseif (d50>10 .and. d50<=40) then
+        A=0.23*(d50**(0.28))
+    else
+        A=0.46*(d50**(0.11))
+    endif
+
     update_chart=1
 ENDFUNCTION update_chart
-    
+
+FUNCTION paint_plot
+    use definitions
+    implicit none
+    include <clearwin.ins>
+    integer :: paint_plot
+
+    CALL initsp
+    CALL page(400,600)
+    CALL chset(-11)
+    CALL newpag
+    CALL title7('T','C','Plot')
+    CALL scales(0,deltaX*(n+1),1,0,deltaY*(ny+1),1)
+    CALL axgrid('*Cartesian',1,-1)
+    CALL newpic
+    CALL axis7('XCartesian','x-axis')
+    CALL axis7('YCartesian','y-axis')
+!$$$$$$     CALL axes7('x-axis','y-axis')
+    CALL brkncv(x,ys,n+1,0)
+    CALL SIMPLEPLOT_REDRAW@
+
+
+!$$$$$$ CALL SHSET(1)
+!$$$$$$ CALL SHDESC(45,45,135,135,1,0.05)
+!$$$$$$ 
+!$$$$$$ CALL SCALES(0,deltaX*(n+1),1,0,deltaY*(ny+1),1)
+!$$$$$$ 
+!$$$$$$ CALL AXES7( 'Power' , 'Volume' )
+!$$$$$$ 
+!$$$$$$ CALL DEFKEY(2, 'B' , 'R' ,3,7)
+!$$$$$$ 
+!$$$$$$ CALL SHDEAR(X,deltaX,ys,n,2)
+!$$$$$$ 
+!$$$$$$ CALL ADDJST( 'C' )
+!$$$$$$ CALL ADDCP7( 'Experimental Data' )
+!$$$$$$ 
+!$$$$$$ CALL ADDJST( 'L' )
+!$$$$$$ CALL SHDEK7(2, 'Data 5' )
+
+    paint_plot=1
+ENDFUNCTION paint_plot
+
 FUNCTION setup_plot
     use definitions
     implicit none
@@ -402,6 +618,19 @@ FUNCTION update_plot
 
     update_plot=1
 ENDFUNCTION update_plot
+
+FUNCTION reset_shore
+    use definitions
+    implicit none
+    include <windows.ins>
+    integer :: reset_shore
+
+    ys=d
+    ys_omni(1,:)=d
+    CALL simpleplot_redraw@
+
+    reset_shore=1
+ENDFUNCTION reset_shore
 
 FUNCTION lock_unlock
     use definitions

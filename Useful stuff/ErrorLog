@@ -1,3 +1,0 @@
-C:\TFG\Useful stuff\sleep.F95(3) : error 1025 - The USE statement requires a comma between the module name and the ONLY or rename list
-C:\TFG\Useful stuff\sleep.F95(3) : error 95 - ':' found where a USE entity names name was expected
-C:\TFG\Useful stuff\sleep.F95(3) : error 404 - Cannot find definition for MODULE 

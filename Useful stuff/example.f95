@@ -74,7 +74,7 @@ USE mswin
 USE spwin
 LIBRARY 'c:\program files (x86)\silverfrost\ftn95\simple.dll'
 IMPLICIT NONE
-REAL,DIMENSION(100) ::xarr,yarr
+REAL*8,DIMENSION(100) ::xarr,yarr
 INTEGER :: narr,ltype,xscale,yscale,nstep=1,mtype=5
 INTEGER :: ctype,i,ans
 CHARACTER(8) :: xlabel="x",ylabel="y",ptype
@@ -87,8 +87,8 @@ DO i=1,100
   narr=narr+1
 END DO
 
-HDC_DIM%iWidth = 600
-HDC_DIM%iHeight = 800
+HDC_DIM%iWidth = 400
+HDC_DIM%iHeight = 600
 HDC_DIM%iBitmapDC = GET_Bitmap_DC@(HDC_DIM%iWidth, HDC_DIM%iHeight)
 CALL SP_SupplyBitmap ! Pass Bitmap to SIMPLEPLOT
 CALL INITSP
@@ -136,5 +136,9 @@ ELSE !scatter
 ENDIF
 ans=winio@('%ca[A Simple Plot with Simpleplot]%bg[grey]&')
 ans=winio@('%dw&',HDC_DIM%iBitmapDC) ! Pass bitmapDC to ClearWin
+!$$$$$$ ans=winio@('%pl[colour=blue,x_array]&',600,400,narr,xarr,yarr)
 ans=winio@('%ff%nl%cn%6bt[Close]')
+!$$$$$$ yarr(:)=1
+!$$$$$$ CALL window_update@(HDC_DIM%iBitmapDC)
+!$$$$$$ CALL SIMPLEPLOT_REDRAW@
 END PROGRAM Simpleplot_plots
