@@ -4,10 +4,9 @@
 
 MODULE definitions
     !Define variables and parameters
-!$$$$$$     character(len=10):: name
-    character*7 shore_cases(2)
-    data shore_cases /'Case 1','Case 2'/
-    integer :: nT,n,ny,Lx,Ly,T_current,show_init,lock_plot,lock_data
+    character*80,dimension(25) :: groins
+    real*8,dimension(24,3) :: groin_vals
+    integer :: nT,n,ny,Lx,Ly,T_current,show_init,lock_plot,lock_data,groin_sel(24)
     real*8 :: deltaT,deltaX,deltaY,pi,fill,slider_current,K_par,ro_s,ro_w,p,brindex,mu,T,theta0,H0,A,d50,Hb_local,theta_b_local,d
     real*8 :: x_gr,h_gr,w_gr
     real*8,dimension(:,:),allocatable :: ys_omni,Q,Hb,theta_b,H_vis
@@ -93,6 +92,10 @@ PROGRAM sedtrans
     Gt=mu*((sum(Hb)/size(Hb))**2.5)/(A*(Ly**0.6667))
 !$$$$$$     print*,(deltaX**2)/(2*G)
 !$$$$$$     print*,deltaT
+    groins(:)=''
+    groin_sel(:)=0
+    groins(1)='|Position|Height|Width'
+    groin_vals(:,:)=0
     lock_plot=0
     lock_data=1
     T_current=0
@@ -147,13 +150,13 @@ PROGRAM sedtrans
     i=winio@('%sh&',page2)
         i=winio@('%ca[Structures]&')
         i=winio@('%1.2ob[no_border]&')
-            i=winio@('%ff%nl%cn%`bg[scrollbar]%1.1ob&')
-                i=winio@('Insert groin at:  %co[check_on_focus_loss,right_justify]%`bg[white]%~5rf (m)&',x_gr,lock_data)
-                i=winio@('%ff%nlHeight:  %co[check_on_focus_loss,right_justify]%`bg[white]%~5rf (m)&',h_gr,lock_data)
-                i=winio@('%ff%nlWidth:  %co[check_on_focus_loss,right_justify]%`bg[white]%~5rf (m)&',w_gr,lock_data)
+            i=winio@('%ff%nl%cn%`bg[scrollbar]%1.1ob%ulInsert groin%`ul%ff%nl%2.3ob[no_border]&')
+                i=winio@('Position:%cb  %co[check_on_focus_loss,right_justify]%`bg[white]%~5rf (m)%cb&',x_gr,lock_data)
+                i=winio@('Height:%cb  %co[check_on_focus_loss,right_justify]%`bg[white]%~5rf (m)%cb&',h_gr,lock_data)
+                i=winio@('Width:%cb  %co[check_on_focus_loss,right_justify]%`bg[white]%~5rf (m)%cb&',w_gr,lock_data)
                 i=winio@('%ff%nl%cn%~^bb[Insert]%cb&',lock_data,add_groin)
             i=winio@('%cb&')
-            i=winio@('%nlList%cb')
+            i=winio@('%nl%lv[single_selection]%cb',185,200,groins,size(groins)-1,groin_sel,1)
     !H plot sub-window
     !i=winio@('%ww[topmost,no_caption,no_frame]%ca[Wave Height]&')
         !i=winio@('%1.1ob%1.2ob[no_border]%pl[x_axis=Y,y_axis=H,colour=blue,x_array]%cb%cn%bt[Close]%cb%cb',500,400,ny+1,y,H(1,:,1))
@@ -214,7 +217,7 @@ SUBROUTINE shore_calc
     i=winio@('%lw',ctrl)
     
     do i=1,n+1
-        m=propagate(ys_omni(1,i))
+        m=propagate(ys_omni(1,i)) !Call function and store the updated local parameters in global vars.
             Hb(i,1)=Hb_local
             theta_b(i,1)=theta_b_local
             H(i,:,1)=H_local(:)
@@ -222,43 +225,57 @@ SUBROUTINE shore_calc
     do k=1,nT
      !!Calculate Q (Sediment flux)
       !Initial point (i=1)
-      if (ygroin(1)-ys_omni(k,1)>=0) then !groin
+      if (ygroin(1)-ys_omni(k,1)>0) then !Groin
         Q(k+1,1)=0 
       else !Periodic
         Q(k+1,1)=mu*(Hb(1,k)**(5/2))*sin(2*((theta_b(1,k)*pi/180)-atan((ys_omni(k,2)-ys_omni(k,n))/(2*deltaX)))) 
       endif
       !Intermediate points
       do i=2,n
-        if (ygroin(i)-ys_omni(k,i)>=0) then !Groin
+        if (ygroin(i)-ys_omni(k,i)>0) then !Groin
           Q(k+1,i)=0 
         else !Periodic
-          if (ygroin(i+1)>0) then !Right before a groin (don't use its 'ys' value!!)
+          if (theta0<0 .and. ygroin(i+1)-ys_omni(k,i+1)>0) then !Before a groin and waves coming from East (don't use its 'ys' value!)
             Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i)-ys_omni(k,i-1))/(deltaX)))) 
-          elseif (ygroin(i-1)>0) then !Right after a groin (don't use its 'ys' value!!)
+          elseif (theta0>=0 .and. ygroin(i-1)-ys_omni(k,i-1)>0) then !After a groin and waves coming from West (don't use its 'ys' value!)
             Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i+1)-ys_omni(k,i))/(deltaX)))) 
           else
-            Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i+1)-ys_omni(k,i-1))/(2*deltaX))))
+            if (theta0<0 .and. ygroin(i)>0) then !Groin surpassed, only consider excess sand. East waves.
+              Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i)-ys_omni(k,i-1))/(deltaX))))
+            elseif (theta0>=0 .and. ygroin(i)>0) then !Groin surpassed, only consider excess sand. West waves.
+              Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i+1)-ys_omni(k,i))/(deltaX))))
+            else !No groin
+              Q(k+1,i)=mu*(Hb(i,k)**(5/2))*sin(2*((theta_b(i,k)*pi/180)-atan((ys_omni(k,i+1)-ys_omni(k,i-1))/(2*deltaX))))
+            endif
           endif
         endif
       enddo
       !Final point (i=n+1)
-      if (ygroin(n+1)-ys_omni(k,n+1)>=0) then !Groin
+      if (ygroin(n+1)-ys_omni(k,n+1)>0) then !Groin
         Q(k+1,n+1)=0 
       else !Periodic
         Q(k+1,n+1)=mu*(Hb(n+1,k)**(5/2))*sin(2*((theta_b(n+1,k)*pi/180)-atan((ys_omni(k,2)-ys_omni(k,n))/(2*deltaX))))
       endif
       
      !!Calculate ys (Shore-line)
-      !Initial point (i=1)
+      i=1 !Initial point
       if (ygroin(i)-ys_omni(k,i)>0) then !Groin
-        ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(2*deltaX*10))*(Q(k+1,2)-Q(k+1,n)) 
+        if (theta0>=0) then
+            ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(deltaX*10))*(Q(k+1,1)-Q(k+1,n))
+        else
+            ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(deltaX*10))*(Q(k+1,2)-Q(k+1,1))
+        endif
         m=propagate(ys_omni(k+1,1)) !This function calculates Hb and theta_b for the given 'i' position.
             Hb(1,k+1)=Hb_local
             theta_b(1,k+1)=theta_b_local
             H(1,:,k+1)=H_local(:)
       else
-        if (ygroin(i)>0) then !Sand has reached the tip of the groin.
-          ys_omni(k+1,i)=ygroin(i)
+        if (ygroin(1)>0) then !Sand has reached the tip of the groin.
+          if (theta0>=0) then
+              ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(deltaX*10))*(Q(k+1,1)-Q(k+1,n))
+          else
+              ys_omni(k+1,1)=ys_omni(k,1)-(deltaT/(deltaX*10))*(Q(k+1,2)-Q(k+1,1))
+          endif
           m=propagate(ys_omni(k+1,i))
               Hb(i,k+1)=Hb_local
               theta_b(i,k+1)=theta_b_local
@@ -273,15 +290,25 @@ SUBROUTINE shore_calc
       endif
       !Intermediate points
       do i=2,n
-        if (ygroin(i)-ys_omni(k,i)>0) then
-          ys_omni(k+1,i)=ys_omni(k,i)-(deltaT/(deltaX*10))*(Q(k+1,i+1)-Q(k+1,i)) !Groin
+        if (ygroin(i)-ys_omni(k,i)>0) then !Groin
+          if (theta0>=0) then
+              ys_omni(k+1,i)=ys_omni(k,i)-(deltaT/(deltaX*10))*(Q(k+1,i)-Q(k+1,i-1))
+          else
+              ys_omni(k+1,i)=ys_omni(k,i)-(deltaT/(deltaX*10))*(Q(k+1,i+1)-Q(k+1,i))
+          endif
           m=propagate(ys_omni(k+1,i))
               Hb(i,k+1)=Hb_local
               theta_b(i,k+1)=theta_b_local
               H(i,:,k+1)=H_local(:)
         else
           if (ygroin(i)>0) then !Sand has reached the tip of the groin.
-            ys_omni(k+1,i)=ygroin(i)
+!$$$$$$             ys_omni(k+1,i)=ygroin(i)
+!$$$$$$             ys_omni(k+1,i)=ys_omni(k,i)-(deltaT/(2*deltaX*10))*(Q(k+1,i+1)-Q(k+1,i-1))
+            if (theta0>=0) then
+                ys_omni(k+1,i)=ys_omni(k,i)-(deltaT/(deltaX*10))*(Q(k+1,i)-Q(k+1,i-1))
+            else
+                ys_omni(k+1,i)=ys_omni(k,i)-(deltaT/(deltaX*10))*(Q(k+1,i+1)-Q(k+1,i))
+            endif
             m=propagate(ys_omni(k+1,i))
                 Hb(i,k+1)=Hb_local
                 theta_b(i,k+1)=theta_b_local
@@ -295,16 +322,24 @@ SUBROUTINE shore_calc
           endif
         endif
       enddo
-      !Final point (i=n+1)
+      i=n+1 !Final point
       if (ygroin(i)-ys_omni(k,i)>0) then !Groin
-        ys_omni(k+1,n+1)=ys_omni(k,n+1)-(deltaT/(deltaX*10))*(Q(k+1,n+1)-Q(k+1,n)) 
+        if (theta0>=0) then
+            ys_omni(k+1,n+1)=ys_omni(k,n+1)-(deltaT/(deltaX*10))*(Q(k+1,n+1)-Q(k+1,n))
+        else
+            ys_omni(k+1,n+1)=ys_omni(k,n+1)-(deltaT/(deltaX*10))*(Q(k+1,2)-Q(k+1,n+1))
+        endif 
         m=propagate(ys_omni(k+1,n+1))
             Hb(n+1,k+1)=Hb_local
             theta_b(n+1,k+1)=theta_b_local
             H(n+1,:,k+1)=H_local(:)
       else
-        if (ygroin(i)>0) then !Sand has reached the tip of the groin.
-          ys_omni(k+1,n+1)=ygroin(n+1)
+        if (ygroin(n+1)>0) then !Sand has reached the tip of the groin.
+          if (theta0>=0) then
+              ys_omni(k+1,n+1)=ys_omni(k,n+1)-(deltaT/(deltaX*10))*(Q(k+1,n+1)-Q(k+1,n))
+          else
+              ys_omni(k+1,n+1)=ys_omni(k,n+1)-(deltaT/(deltaX*10))*(Q(k+1,2)-Q(k+1,n+1))
+          endif
           m=propagate(ys_omni(k+1,n+1))
               Hb(n+1,k+1)=Hb_local
               theta_b(n+1,k+1)=theta_b_local
@@ -352,9 +387,9 @@ ENDFUNCTION strtonum
 
 ! Convert a value to a formatted string
 FUNCTION numtostr(num)
-    integer num
+    real*8 num
     character(len=10) numtostr
-    write (numtostr,'(I10)') num
+    write (numtostr,'(F10.2)') num
 ENDFUNCTION numtostr
 
 FUNCTION propagate(y_value)
@@ -385,7 +420,7 @@ FUNCTION propagate(y_value)
         enddo
     enddo
     !Calculate H(wave height) along the y axis:
-    !First iteration to allow initial comparison
+    !First iteration to allow initial comparison in subsequent loop.
     j=ny+1
     if (D_local(j)/L1(j)>=0.5) then !deep waters
         Ks=L0/(2*T)
@@ -396,7 +431,7 @@ FUNCTION propagate(y_value)
     endif
     Kr=sqrt(cos(theta0*pi/180)/cos(asin((L1(j)/L0)*sin(theta0*pi/180))))
     H_local(j)=H0*Ks*Kr
-    !Iterate while checking for breaking conditions
+    !Iterate while checking for breaking condition (approaching the shoreline).
     do while (j>1.and.D_local(j)>0.and.H_local(j)/D_local(j)<=brindex)
         j=j-1
         if (D_local(j)/L1(j)>=0.5) then !deep waters
@@ -447,13 +482,14 @@ FUNCTION setup_plot
     include <windows.ins>
     integer :: i,setup_plot,update_plot,lock_unlock
     external update_plot,lock_unlock
+    
+    i=lock_unlock()
 
     ys_omni(1,:)=ys_omni(T_current+1,:) !Reset timer
     T_current=0
     CALL shore_calc
 
     i=update_plot()
-    i=lock_unlock()
     
     setup_plot=1
 ENDFUNCTION setup_plot
@@ -484,37 +520,79 @@ FUNCTION reset_shore
 
     ys=d
     ys_omni(1,:)=d
+    T_current=0
     CALL simpleplot_redraw@
 
     reset_shore=1
 ENDFUNCTION reset_shore
 
-FUNCTION add_groin !Revisar
+FUNCTION add_groin
     use definitions
     implicit none
     include <windows.ins>
-    integer :: add_groin,i,j
-    if (nint(x_gr/deltaX)+1==(n+1).or.nint(x_gr/deltaX)+1==1) then
+    integer :: add_groin,taken,i,j
+    character*10 numtostr
+    external numtostr
+
+    if (h_gr<=0.1) then !Too low, not a groin.
+        j=winio@('%1SI!Height value is too low.%nl%nl%cn%`6bt[Ok]%ca[Warning]')
+    !The shore is longshore-wise periodic. As such, a groin at the first point must also appear at the final point.
+    elseif (nint(x_gr/deltaX)+1==(n+1).or.nint(x_gr/deltaX)+1==1) then !Enclosed between two groins.
+      if (ygroin(1)==0) then !Check if there's a groin there already.
         ygroin(1)=h_gr
         ygroin(n+1)=h_gr
-        do i=1,nint((w_gr/2)/deltaX)+1
+        do i=1,nint((w_gr/2)/deltaX)+1 !From 1 to W/2
             ygroin(i)=h_gr
         enddo
-        do i=nint((n+1)-((w_gr/2)/deltaX)),n+1
+        do i=nint((n+1)-((w_gr/2)/deltaX)),n+1 !From (n+1-W/2) to (n+1)
             ygroin(i)=h_gr
         enddo
-    elseif (nint((x_gr+(w_gr/2))/deltaX)+1>=(n+1).or.nint((x_gr-(w_gr/2))/deltaX)+1<=1) then
+        !List managing:
+        j=1
+        do while (groins(j)/='')
+          j=j+1
+        enddo
+        groins(j)='|'//numtostr(x_gr)//'|'//numtostr(h_gr)//'|'//numtostr(w_gr)
+        groin_vals(j-1,1)=x_gr
+        groin_vals(j-1,2)=h_gr
+        groin_vals(j-1,3)=w_gr
+      else !There was a groin there already.
+        j=winio@('%1SI!There is another groin there.%nl%nl%cn%`6bt[Ok]%ca[Warning]')
+      endif
+    elseif (nint((x_gr+(w_gr/2))/deltaX)+1>=(n+1).or.nint((x_gr-(w_gr/2))/deltaX)+1<=1) then !Too wide.
         j=winio@('%1SI!The groin specified exceeds beach dimensions.%nl%nl%cn%`6bt[Ok]%ca[Warning]')
-    else
-        do i=nint((x_gr-(w_gr/2))/deltaX)+1,nint((x_gr+(w_gr/2))/deltaX)+1
-            ygroin(i)=h_gr
+    else !Normal groin.
+        taken=0
+        do i=nint((x_gr-(w_gr/2))/deltaX)+1,nint((x_gr+(w_gr/2))/deltaX)+1 !Check if there's a groin there already.
+            if (ygroin(i)/=0) then
+              taken=1
+            endif
         enddo
+        if (taken==0) then !No groins there.
+          do i=nint((x_gr-(w_gr/2))/deltaX)+1,nint((x_gr+(w_gr/2))/deltaX)+1
+              ygroin(i)=h_gr
+          enddo
+          !List managing:
+          j=1
+          do while (groins(j)/='')
+            j=j+1
+          enddo
+          groins(j)='|'//numtostr(x_gr)//'|'//numtostr(h_gr)//'|'//numtostr(w_gr)
+          groin_vals(j-1,1)=x_gr
+          groin_vals(j-1,2)=h_gr
+          groin_vals(j-1,3)=w_gr
+        else !There was a groin there already.
+          j=winio@('%1SI!There is another groin there.%nl%nl%cn%`6bt[Ok]%ca[Warning]')
+        endif
     endif
+    CALL simpleplot_redraw@
+
+
+     
+
     x_gr=0.0
     h_gr=0.0
     w_gr=0.0
-    CALL simpleplot_redraw@
-
     add_groin=1
 ENDFUNCTION add_groin
 
